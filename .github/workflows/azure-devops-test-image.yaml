@@ -1,0 +1,64 @@
+name: Publish Azure DevOps test image
+
+on:
+  push:
+    branches: [codex/azure-devops-test-image]
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  SOURCE_SHA: 5fe77ea98ed5e383dfe9c6635f24bbfe8f1d119f
+  TEST_IMAGE: ghcr.io/stefanm8/argocd-image-updater:azure-devops-5fe77ea98ed5
+
+jobs:
+  build:
+    if: github.repository == 'stefanm8/argocd-image-updater'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: amd64
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          persist-credentials: false
+      - name: Log in to GHCR
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+      - name: Build and push
+        run: |
+          docker buildx build \
+            --platform linux/${{ matrix.arch }} \
+            --tag "$TEST_IMAGE-${{ matrix.arch }}" \
+            --label org.opencontainers.image.source=https://github.com/stefanm8/argocd-image-updater \
+            --label org.opencontainers.image.revision="$SOURCE_SHA" \
+            --push .
+      - name: Verify binary version
+        run: docker run --rm "$TEST_IMAGE-${{ matrix.arch }}" version
+
+  manifest:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Log in to GHCR
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+      - name: Publish and verify multi-platform image
+        run: |
+          docker buildx imagetools create \
+            --tag "$TEST_IMAGE" \
+            "$TEST_IMAGE-amd64" \
+            "$TEST_IMAGE-arm64"
+          docker buildx imagetools inspect "$TEST_IMAGE"
+          printf 'Published `%s` for linux/amd64 and linux/arm64.\n' "$TEST_IMAGE" >> "$GITHUB_STEP_SUMMARY"
