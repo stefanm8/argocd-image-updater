@@ -9,8 +9,8 @@ permissions:
   packages: write
 
 env:
-  SOURCE_SHA: 306bf86ce0753fdbb0bfc6e9f0a29f96dda75117
-  TEST_IMAGE: ghcr.io/stefanm8/argocd-image-updater:azure-devops-306bf86ce075
+  SOURCE_SHA: 61728589091f8a9520205751abc7fd848ddeda0d
+  TEST_IMAGE: ghcr.io/stefanm8/argocd-image-updater:azure-devops-61728589091f
 
 jobs:
   build:
